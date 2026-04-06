@@ -1,0 +1,23 @@
+# Secrets
+.env
+*.key
+*.pem
+credentials.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Node (if any MCP servers use it)
+node_modules/
+
+# Python
+__pycache__/
+*.pyc
+.venv/

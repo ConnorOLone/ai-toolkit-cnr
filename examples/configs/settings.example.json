@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Read",
+      "Grep",
+      "Glob",
+      "Bash(npm test*)",
+      "Bash(npm run lint*)"
+    ],
+    "deny": [
+      "Bash(rm -rf *)",
+      "Bash(git push --force*)"
+    ]
+  },
+  "hooks": {
+    "UserPromptSubmit": [],
+    "PreToolUse": [],
+    "PostToolUse": []
+  },
+  "env": {}
+}

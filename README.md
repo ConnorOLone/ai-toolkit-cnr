@@ -20,15 +20,31 @@ examples/        — Reference templates (not symlinked — copy to create new a
 
 Each directory contains its own README with conventions and docs links.
 
-## Setup (macOS)
+## Setup
 
+### Interactive manager (recommended)
+
+```sh
+python3 manage.py              # first run — from the repo
+python3 manage.py --install-cli  # install the 'aitk' global command
+aitk                           # run from anywhere after install
+```
+
+Cross-platform interactive CLI. Shows all available assets (skills, agents, rules, hooks, configs), their install status, and lets you toggle them on/off. Works on macOS and Windows. Requires [uv](https://docs.astral.sh/uv/) for the global `aitk` command.
+
+### Batch install (all assets)
+
+**macOS:**
 ```sh
 ./scripts/install.sh
 ```
 
-Symlinks skills, agents, and rules into `~/.claude/`. Examples are never symlinked.
+**Windows:**
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\install.ps1
+```
 
-On Windows, pull and copy manually.
+Installs everything. macOS uses symlinks; Windows uses copies (re-run after updating).
 
 ## Docs
 

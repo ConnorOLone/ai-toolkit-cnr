@@ -120,5 +120,10 @@ else
   echo "CLAUDE.md: skipped (no configs/CLAUDE.md found)"
 fi
 
+# --- Toolkit path marker ---
+
+echo "$REPO_DIR" > "$CLAUDE_DIR/.toolkit-path"
+echo "Toolkit path: saved to $CLAUDE_DIR/.toolkit-path"
+
 echo ""
 echo "Done."

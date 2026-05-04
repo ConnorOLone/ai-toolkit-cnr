@@ -22,7 +22,17 @@ Each directory contains its own README with conventions and docs links.
 
 ## Setup
 
-### Interactive manager (recommended)
+### Claude-guided setup (recommended)
+
+Clone the repo, open Claude Code, and say:
+
+```
+follow setup.md
+```
+
+Claude will handle everything: install assets, set up the `aitk` CLI, register hooks, and verify the setup. Works on macOS and Windows.
+
+### Interactive manager
 
 ```sh
 python3 manage.py              # first run — from the repo

@@ -357,123 +357,153 @@ def run():
 
 # ── Scaffolding ────────────────────────────────────────────────────────────
 
+# (label, default, hint) — all fields are optional; empty values are omitted
 SKILL_FIELDS = [
-    ("name",                     True,  None,   "Lowercase with hyphens (e.g. my-skill)"),
-    ("description",              True,  None,   "Start with 'Use when...' — triggering conditions only"),
-    ("user-invocable",           False, "true",  "Can the user invoke this with /skill-name? (true/false)"),
-    ("disable-model-invocation", False, "false", "Prevent auto-invocation by model? (true/false)"),
-    ("allowed-tools",            False, "Read Write Edit Glob Grep Bash", "Space-separated tool names"),
-    ("argument-hint",            False, "",      "Hint shown to user (e.g. '[topic]')"),
-    ("model",                    False, "",      "Model override (sonnet/opus/haiku, blank for default)"),
+    ("name",                     None,                            "Lowercase with hyphens (e.g. my-skill)"),
+    ("description",              None,                            "Start with 'Use when...' — triggering conditions only"),
+    ("user-invocable",           "true",                          "Can the user invoke this with /skill-name? (true/false)"),
+    ("disable-model-invocation", "false",                         "Prevent auto-invocation by model? (true/false)"),
+    ("allowed-tools",            None,                            "Auto-approve these tools (blank = ask per your settings)"),
+    ("argument-hint",            None,                            "Hint shown to user (e.g. '[topic]')"),
+    ("model",                    None,                            "Model override (sonnet/opus/haiku, blank for default)"),
 ]
 
 AGENT_FIELDS = [
-    ("name",          True,  None,    "Agent name with hyphens"),
-    ("description",   True,  None,    "What this agent does"),
-    ("allowed-tools", False, "Read Grep Glob", "Space-separated tool names"),
-    ("model",         False, "sonnet", "Model to use (sonnet/opus/haiku)"),
+    ("name",          None,          "Agent name with hyphens"),
+    ("description",   None,          "What this agent does"),
+    ("allowed-tools", None,              "Auto-approve these tools (blank = ask per your settings)"),
+    ("model",         "sonnet",      "Model to use (sonnet/opus/haiku)"),
 ]
 
 RULE_FIELDS = [
-    ("paths", False, "", "Glob patterns, comma-separated (e.g. src/**/*.ts, tests/**/*.ts)"),
+    ("paths", None, "Glob patterns, comma-separated (e.g. src/**/*.ts, tests/**/*.ts)"),
 ]
 
 HOOK_FIELDS = [
-    ("event",   True,  None, "Hook event (PreToolUse/PostToolUse)"),
-    ("matcher", False, "",   "Tool matcher pattern (e.g. Bash, Bash(git commit*))"),
+    ("event",   None, "Hook event (PreToolUse/PostToolUse/SessionStart/Stop/etc.)"),
+    ("matcher", None, "Tool matcher pattern (e.g. Bash, Write|Edit)"),
 ]
 
 
-def prompt_field(label, required, default, hint):
+import json
+
+TOOLS_JSON = REPO_DIR / "configs" / "tools.json"
+
+def load_tools_reference():
+    if TOOLS_JSON.exists():
+        with open(TOOLS_JSON, encoding="utf-8") as f:
+            return json.load(f)
+    return {}
+
+TOOLS_REFERENCE = load_tools_reference()
+AVAILABLE_TOOLS = list(TOOLS_REFERENCE.keys())
+
+
+def cmd_tools():
+    print(f"\n{BOLD}Claude Code Tools Reference{RESET}")
+    print(f"{DIM}Use these names in the allowed-tools field of skill/agent frontmatter.{RESET}")
+    print(f"{DIM}Supports patterns: Bash(git *) auto-approves all git commands.{RESET}\n")
+
+    if not TOOLS_REFERENCE:
+        print(f"  {YELLOW}No tools data found.{RESET}")
+        print(f"  Run the tools-audit skill or check configs/tools.json\n")
+        return
+
+    max_name = max(len(name) for name in TOOLS_REFERENCE)
+    for name, desc in TOOLS_REFERENCE.items():
+        print(f"  {YELLOW}{name:<{max_name}}{RESET}  {desc}")
+
+    print(f"\n{DIM}Common set: Read Write Edit Glob Grep Bash{RESET}")
+    print(f"{DIM}Blank allowed-tools = use your normal permission settings (not restrictive).{RESET}")
+    print(f"{DIM}Source: {TOOLS_JSON}{RESET}\n")
+
+
+def prompt_field(label, default, hint):
     suffix = f" {DIM}({hint}){RESET}"
-    if default:
+    if label == "allowed-tools":
+        print(f"  {label}{suffix}")
+        print(f"  {DIM}Available: {', '.join(AVAILABLE_TOOLS)}{RESET}")
+        print(f"  {DIM}Space-separated. Common: Read Write Edit Glob Grep Bash{RESET}")
+        prompt_str = f"  [{default}]: " if default else "  [skip]: "
+    elif default:
         prompt_str = f"  {label}{suffix}\n  [{default}]: "
-    elif required:
-        prompt_str = f"  {label} {RED}(required){RESET}{suffix}\n  : "
     else:
         prompt_str = f"  {label}{suffix}\n  [skip]: "
 
-    while True:
-        sys.stdout.write(prompt_str)
-        sys.stdout.flush()
-        value = input().strip()
-        if not value:
-            if default:
-                return default
-            if required:
-                print(f"  {RED}This field is required.{RESET}")
-                continue
-            return ""
-        return value
+    sys.stdout.write(prompt_str)
+    sys.stdout.flush()
+    value = input().strip()
+    if not value:
+        return default or ""
+    return value
 
 
-def scaffold_skill(name):
+def build_frontmatter(field_defs, values):
+    lines = ["---"]
+    for label, _, _ in field_defs:
+        val = values.get(label, "")
+        if val:
+            lines.append(f"{label}: {val}")
+    lines.append("---")
+    return "\n".join(lines)
+
+
+def scaffold_skill(name, bare=False):
     skill_dir = REPO_DIR / "skills" / name
     if skill_dir.exists():
         print(f"{RED}Skill '{name}' already exists at {skill_dir}{RESET}")
         return
-    print(f"\n{BOLD}New skill: {name}{RESET}\n")
-    fields = {}
-    for label, required, default, hint in SKILL_FIELDS:
-        if label == "name":
-            fields[label] = name
-            continue
-        fields[label] = prompt_field(label, required, default, hint)
+    fields = {"name": name}
+    if not bare:
+        print(f"\n{BOLD}New skill: {name}{RESET}")
+        print(f"{DIM}Press Enter to accept [default] or type a value. Enter to skip optional fields.{RESET}\n")
+        for label, default, hint in SKILL_FIELDS:
+            if label == "name":
+                continue
+            fields[label] = prompt_field(label, default, hint)
 
-    frontmatter_lines = ["---"]
-    for label, _, _, _ in SKILL_FIELDS:
-        val = fields.get(label, "")
-        if val:
-            frontmatter_lines.append(f"{label}: {val}")
-    frontmatter_lines.append("---")
-
-    body = "\n".join(frontmatter_lines) + "\n\n# " + name.replace("-", " ").title() + "\n\n"
+    body = build_frontmatter(SKILL_FIELDS, fields) + "\n\n# " + name.replace("-", " ").title() + "\n\n"
 
     skill_dir.mkdir(parents=True)
     (skill_dir / "SKILL.md").write_text(body, encoding="utf-8")
     print(f"\n{GREEN}Created: {skill_dir / 'SKILL.md'}{RESET}")
-    print(f"{DIM}Edit the file to add your skill instructions.{RESET}")
 
 
-def scaffold_agent(name):
+def scaffold_agent(name, bare=False):
     agent_file = REPO_DIR / "agents" / f"{name}.md"
     if agent_file.exists():
         print(f"{RED}Agent '{name}' already exists at {agent_file}{RESET}")
         return
-    print(f"\n{BOLD}New agent: {name}{RESET}\n")
-    fields = {}
-    for label, required, default, hint in AGENT_FIELDS:
-        if label == "name":
-            fields[label] = name
-            continue
-        fields[label] = prompt_field(label, required, default, hint)
+    fields = {"name": name}
+    if not bare:
+        print(f"\n{BOLD}New agent: {name}{RESET}")
+        print(f"{DIM}Press Enter to accept [default] or type a value. Enter to skip optional fields.{RESET}\n")
+        for label, default, hint in AGENT_FIELDS:
+            if label == "name":
+                continue
+            fields[label] = prompt_field(label, default, hint)
 
-    frontmatter_lines = ["---"]
-    for label, _, _, _ in AGENT_FIELDS:
-        val = fields.get(label, "")
-        if val:
-            frontmatter_lines.append(f"{label}: {val}")
-    frontmatter_lines.append("---")
-
-    body = "\n".join(frontmatter_lines) + "\n\nSystem prompt instructions here...\n"
+    body = build_frontmatter(AGENT_FIELDS, fields) + "\n\n"
 
     (REPO_DIR / "agents").mkdir(parents=True, exist_ok=True)
     agent_file.write_text(body, encoding="utf-8")
     print(f"\n{GREEN}Created: {agent_file}{RESET}")
 
 
-def scaffold_rule(name):
+def scaffold_rule(name, bare=False):
     rule_file = REPO_DIR / "rules" / f"{name}.md"
     if rule_file.exists():
         print(f"{RED}Rule '{name}' already exists at {rule_file}{RESET}")
         return
-    print(f"\n{BOLD}New rule: {name}{RESET}\n")
     fields = {}
-    for label, required, default, hint in RULE_FIELDS:
-        fields[label] = prompt_field(label, required, default, hint)
+    if not bare:
+        print(f"\n{BOLD}New rule: {name}{RESET}")
+        print(f"{DIM}Press Enter to accept [default] or type a value. Enter to skip optional fields.{RESET}\n")
+        for label, default, hint in RULE_FIELDS:
+            fields[label] = prompt_field(label, default, hint)
 
-    lines = []
     paths = fields.get("paths", "")
+    lines = []
     if paths:
         lines.append("---")
         lines.append("paths:")
@@ -481,7 +511,6 @@ def scaffold_rule(name):
             lines.append(f'  - "{p}"')
         lines.append("---")
     lines.append("")
-    lines.append("Instructions here...")
     lines.append("")
 
     (REPO_DIR / "rules").mkdir(parents=True, exist_ok=True)
@@ -489,27 +518,34 @@ def scaffold_rule(name):
     print(f"\n{GREEN}Created: {rule_file}{RESET}")
 
 
-def scaffold_hook(name):
+def scaffold_hook(name, bare=False):
     hook_file = REPO_DIR / "hooks" / f"{name}.sh"
     if hook_file.exists():
         print(f"{RED}Hook '{name}' already exists at {hook_file}{RESET}")
         return
-    print(f"\n{BOLD}New hook: {name}{RESET}\n")
     fields = {}
-    for label, required, default, hint in HOOK_FIELDS:
-        fields[label] = prompt_field(label, required, default, hint)
+    if not bare:
+        print(f"\n{BOLD}New hook: {name}{RESET}")
+        print(f"{DIM}Press Enter to accept [default] or type a value. Enter to skip optional fields.{RESET}\n")
+        for label, default, hint in HOOK_FIELDS:
+            fields[label] = prompt_field(label, default, hint)
 
+    event = fields.get("event", "")
+    matcher = fields.get("matcher", "")
     lines = [
         "#!/bin/bash",
         f"# Hook: {name}",
-        f"# Event: {fields.get('event', 'PreToolUse')}",
-        f"# Matcher: {fields.get('matcher', '')}",
+    ]
+    if event:
+        lines.append(f"# Event: {event}")
+    if matcher:
+        lines.append(f"# Matcher: {matcher}")
+    lines += [
         "",
         "set -euo pipefail",
         "",
         "input=$(cat)",
         "",
-        "# Exit 0 to allow, exit 2 to block",
         "exit 0",
         "",
     ]
@@ -531,15 +567,17 @@ SCAFFOLDERS = {
 
 def cmd_new(args):
     if len(args) < 2:
-        print(f"Usage: aitk new <type> <name>")
+        print(f"Usage: aitk new <type> <name> [--bare]")
         print(f"Types: {', '.join(SCAFFOLDERS.keys())}")
+        print(f"\n  --bare    Create minimal skeleton without prompts")
         return
     asset_type, name = args[0], args[1]
+    bare = "--bare" in args
     if asset_type not in SCAFFOLDERS:
         print(f"{RED}Unknown type: {asset_type}{RESET}")
         print(f"Types: {', '.join(SCAFFOLDERS.keys())}")
         return
-    SCAFFOLDERS[asset_type](name)
+    SCAFFOLDERS[asset_type](name, bare=bare)
     print(f"\n{DIM}Run 'aitk' to install it on this device.{RESET}")
 
 
@@ -673,9 +711,49 @@ def uninstall_cli():
             print("aitk is not installed.")
 
 
+def cmd_help():
+    print(f"""
+{BOLD}aitk — AI Toolkit Manager{RESET}
+
+{BOLD}Usage:{RESET}
+  aitk                          Interactive toggle UI — browse and install assets
+  aitk help                     Show this help message
+  aitk status                   Show git sync state and installed assets
+  aitk tools                    List all Claude Code tools with descriptions
+  aitk new <type> <name>        Scaffold a new asset (interactive field prompts)
+  aitk new <type> <name> --bare Scaffold with minimal skeleton, no prompts
+  aitk --install-cli            Install the global 'aitk' command
+  aitk --uninstall-cli          Remove the global 'aitk' command
+
+{BOLD}Asset types for 'new':{RESET}
+  skill                         Skill directory with SKILL.md + YAML frontmatter
+  agent                         Agent definition (.md with frontmatter)
+  rule                          Path-specific instruction rule (.md)
+  hook                          Shell script for Claude Code hook events (.sh)
+
+{BOLD}Scaffolding notes:{RESET}
+  All fields are optional — press Enter to skip or accept defaults.
+  Skipped fields are omitted from the output (clean frontmatter).
+  Use --bare when you plan to fill in details with AI later.
+
+{BOLD}Interactive UI controls:{RESET}
+  {YELLOW}↑/↓{RESET}     Navigate assets
+  {YELLOW}Space{RESET}   Toggle install/uninstall
+  {YELLOW}Enter{RESET}   Apply changes
+  {YELLOW}q{RESET}       Quit without applying
+
+{BOLD}Setup:{RESET}
+  Clone the repo, open Claude Code, and say: follow setup.md
+  Or run: python3 manage.py && python3 manage.py --install-cli
+""")
+
+
 if __name__ == "__main__":
     args = sys.argv[1:]
 
+    if "--help" in args or "-h" in args or (args and args[0] == "help"):
+        cmd_help()
+        sys.exit(0)
     if "--install-cli" in args:
         install_cli()
         sys.exit(0)
@@ -685,6 +763,9 @@ if __name__ == "__main__":
 
     if args and args[0] == "new":
         cmd_new(args[1:])
+        sys.exit(0)
+    if args and args[0] == "tools":
+        cmd_tools()
         sys.exit(0)
     if args and args[0] == "status":
         cmd_status()

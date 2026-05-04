@@ -74,22 +74,34 @@ If a SessionStart hook for toolkit-sync already exists, skip this step.
 
 Validate that the resulting settings.json is valid JSON before writing.
 
-## Step 7: Verify
+## Step 7: Audit and update tools reference
+
+Compare `TOOLKIT_DIR/configs/tools.json` against the tools available in this Claude Code session. For each tool you have access to (excluding MCP tools prefixed with `mcp__`), check whether it exists in `tools.json`.
+
+If there are any differences — new tools, removed tools, or descriptions that no longer match — write the updated JSON to `TOOLKIT_DIR/configs/tools.json`. Keep keys sorted alphabetically, 2-space indentation.
+
+After updating, run `python3 TOOLKIT_DIR/manage.py tools` to verify the output.
+
+This keeps `aitk tools` accurate across Claude Code updates.
+
+## Step 8: Verify
 
 Run the following checks and report results:
 
 1. `~/.claude/.toolkit-path` exists and contains the correct path
 2. `~/.claude/skills/` contains symlinks (macOS/Linux) or copies (Windows) pointing to toolkit assets
 3. `aitk --help` or `aitk status` runs successfully (if PATH is set up)
-4. `~/.claude/settings.json` contains the SessionStart hook
-5. The toolkit repo has no uncommitted changes
+4. `aitk tools` runs and shows the current tool list
+5. `~/.claude/settings.json` contains the SessionStart hook
+6. The toolkit repo has no uncommitted changes
 
 Report what was set up and any issues found.
 
-## Step 8: Summary
+## Step 9: Summary
 
 Tell the user:
 - Which assets were installed
 - That `aitk` is available globally to manage assets from anywhere
 - That the toolkit will auto-sync from git at the start of each Claude session
+- That `aitk tools` can be audited with the `tools-audit` skill to stay current
 - To push any local commits if they want changes available on other devices

@@ -565,6 +565,27 @@ SCAFFOLDERS = {
 }
 
 
+def copy_to_clipboard(text):
+    try:
+        if IS_WINDOWS:
+            subprocess.run(["clip"], input=text.encode(), check=True)
+        elif platform.system() == "Darwin":
+            subprocess.run(["pbcopy"], input=text.encode(), check=True)
+        else:
+            subprocess.run(["xclip", "-selection", "clipboard"], input=text.encode(), check=True)
+        return True
+    except Exception:
+        return False
+
+
+NEXT_STEP_HINTS = {
+    "skill": "Next: open the skill in your editor or Claude Code to flesh it out.",
+    "agent": "Next: open the agent file to add instructions and behavior.",
+    "rule":  "Next: open the rule file to add your instructions.",
+    "hook":  "Next: add your logic and register the hook in settings.json.",
+}
+
+
 def cmd_new(args):
     if len(args) < 2:
         print(f"Usage: aitk new <type> <name> [--bare]")
@@ -578,7 +599,19 @@ def cmd_new(args):
         print(f"Types: {', '.join(SCAFFOLDERS.keys())}")
         return
     SCAFFOLDERS[asset_type](name, bare=bare)
-    print(f"\n{DIM}Run 'aitk' to install it on this device.{RESET}")
+
+    asset_paths = {
+        "skill": REPO_DIR / "skills" / name,
+        "agent": REPO_DIR / "agents" / f"{name}.md",
+        "rule":  REPO_DIR / "rules" / f"{name}.md",
+        "hook":  REPO_DIR / "hooks" / f"{name}.sh",
+    }
+    created_path = str(asset_paths[asset_type])
+    if copy_to_clipboard(created_path):
+        print(f"{DIM}Path copied to clipboard.{RESET}")
+
+    print(f"{DIM}{NEXT_STEP_HINTS[asset_type]}{RESET}")
+    print(f"{DIM}Run 'aitk' to install it on this device.{RESET}")
 
 
 # ── Status ─────────────────────────────────────────────────────────────────

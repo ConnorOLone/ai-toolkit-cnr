@@ -13,6 +13,7 @@ This repository stores AI-related tools: skills, hooks, scripts, prompts, MCP se
 - `prompts/` — Reusable prompt templates
 - `mcp/` — MCP server source code
 - `configs/` — Settings fragments, keybindings, MCP configs
+- `claude-shell/` — PowerShell module for terminal-side Claude, sourced from `$PROFILE` (not a Claude Code asset; not installed by `aitk`)
 - `examples/` — Reference templates (not symlinked — copy from here to create new assets)
 
 ## Conventions

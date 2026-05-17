@@ -14,6 +14,7 @@ scripts/         — Standalone utility scripts
 prompts/         — Reusable prompt templates and system prompts
 mcp/             — MCP server configurations and custom servers
 configs/         — Shared configuration files (settings.json fragments, keybindings, etc.)
+claude-shell/    — PowerShell module for terminal-side Claude (sourced from $PROFILE)
 examples/        — Reference templates (not symlinked — copy to create new assets)
 ```
 

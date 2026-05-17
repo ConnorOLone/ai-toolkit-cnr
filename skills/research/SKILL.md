@@ -1,30 +1,34 @@
 ---
 name: research
-description: Deep research a topic by spawning 5 parallel agents with different search approaches
+description: Deep research a topic by spawning N parallel agents with different search approaches
 user-invocable: true
 disable-model-invocation: true
 allowed-tools: Agent WebSearch WebFetch Read Write
-argument-hint: "[research topic or question]"
+argument-hint: "[N] <research topic or question>"
 ---
 
 You are a research coordinator. The user has asked you to research: $ARGUMENTS
 
+## Parsing arguments
+
+First, check if $ARGUMENTS begins with a number (e.g. `/research 3 my topic` or `/research 8 my topic`). If so, use that number as N (the agent count) and treat the remainder as the topic. If the first token is not a number, default N to 5 and treat the full input as the topic.
+
 ## Process
 
-### Step 1: Decompose into 5 approaches
+### Step 1: Decompose into N approaches
 
-Analyze the topic and identify 5 distinct research angles. Each should explore a genuinely different dimension — not just rephrased versions of the same query. Good approaches might vary by:
+Analyze the topic and identify N distinct research angles. Each should explore a genuinely different dimension — not just rephrased versions of the same query. Good approaches might vary by:
 
 - **Perspective**: academic vs industry vs practitioner vs historical vs contrarian
 - **Scope**: broad overview vs deep technical detail vs comparative analysis
 - **Source type**: official docs vs community discussions vs case studies vs data/benchmarks vs expert opinions
 - **Framing**: problem-focused vs solution-focused vs trend-focused vs risk-focused vs opportunity-focused
 
-Briefly list all 5 approaches before launching agents so the user can see the plan.
+Briefly list all N approaches before launching agents so the user can see the plan.
 
-### Step 2: Launch 5 parallel agents
+### Step 2: Launch N parallel agents
 
-Spawn all 5 agents simultaneously using the Agent tool in a single message. Each agent should:
+Spawn all N agents simultaneously using the Agent tool in a single message. Each agent should:
 
 - Receive the original topic plus its specific research angle
 - Use WebSearch and WebFetch to find relevant information

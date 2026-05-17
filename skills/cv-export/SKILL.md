@@ -3,7 +3,6 @@ name: cv-export
 description: Use when the user wants to export a markdown CV (or variant) to a polished, ATS-safe .docx file. Triggers on phrases like "export the CV", "build the docx", "generate CV-COL.docx", or when finishing a CV iteration cycle.
 user-invocable: true
 disable-model-invocation: false
-model: sonnet
 ---
 
 # CV Export

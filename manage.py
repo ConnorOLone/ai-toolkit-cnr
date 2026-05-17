@@ -290,8 +290,10 @@ def render(assets, cursor, message=""):
 
 
 def write_toolkit_path():
+    # Forward slashes: the marker is also read by the bash sync hook, and
+    # POSIX-style paths are valid for both Python and bash on every platform.
     path_file = CLAUDE_DIR / ".toolkit-path"
-    path_file.write_text(str(REPO_DIR), encoding="utf-8")
+    path_file.write_text(REPO_DIR.as_posix(), encoding="utf-8")
 
 
 def apply_changes(assets):

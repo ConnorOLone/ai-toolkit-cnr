@@ -12,8 +12,14 @@ If this file was pasted rather than read from disk, ask the user where they clon
 
 Check that the following are available on this device:
 - `git` — required for sync
-- `python3` — required for manage.py
+- a working Python 3.9+ interpreter — required for manage.py
 - `uv` — required for the `aitk` global command
+
+For Python, do not trust PATH presence alone — actually run the interpreter to
+confirm it works. Try `python3 --version`, then `python --version`. On Windows,
+`python3` is often a non-functional Microsoft Store alias: it appears on PATH
+but fails when run. Use whichever command actually executes, and refer to it as
+`PYTHON` in the steps below.
 
 If any are missing, tell the user what to install and stop.
 
@@ -21,12 +27,14 @@ If any are missing, tell the user what to install and stop.
 
 Write the absolute path of `TOOLKIT_DIR` to `~/.claude/.toolkit-path`. Create the file if it doesn't exist, overwrite if it does. This is how skills and hooks find the toolkit on this device.
 
+Use forward slashes in the path (e.g. `C:/Users/you/CodeHub/ai-toolkit-cnr`), not backslashes. The marker is read by both Python and the bash sync hook, and forward slashes are valid for both. `manage.py` rewrites this file in the same forward-slash format whenever assets are installed or removed.
+
 ## Step 4: Install assets interactively
 
 Tell the user you are about to launch the interactive asset manager, which lets them choose which skills, agents, rules, hooks, and configs to install on this device. Then run:
 
 ```
-python3 TOOLKIT_DIR/manage.py
+PYTHON TOOLKIT_DIR/manage.py
 ```
 
 This must run in an interactive terminal. Tell the user to run it themselves with `!` prefix if you cannot run interactive commands.
@@ -36,7 +44,7 @@ This must run in an interactive terminal. Tell the user to run it themselves wit
 Run:
 
 ```
-python3 TOOLKIT_DIR/manage.py --install-cli
+PYTHON TOOLKIT_DIR/manage.py --install-cli
 ```
 
 This creates an `aitk` alias so the manager can be invoked from any directory.
@@ -68,7 +76,15 @@ The hook to add:
 }
 ```
 
-Replace `TOOLKIT_DIR` with the actual absolute path resolved in Step 1.
+Replace `TOOLKIT_DIR` with the actual absolute path resolved in Step 1, using forward slashes.
+
+`toolkit-sync.sh` is a bash script. On macOS/Linux the bare path above runs directly. On Windows it does not — a `.sh` path is not executable on its own. Set the `command` to invoke it through bash instead:
+
+```
+bash "TOOLKIT_DIR/hooks/toolkit-sync.sh"
+```
+
+Git Bash provides `bash` and is installed alongside the required `git`, so this is always available on Windows.
 
 If a SessionStart hook for toolkit-sync already exists, skip this step.
 
@@ -80,7 +96,7 @@ Compare `TOOLKIT_DIR/configs/tools.json` against the tools available in this Cla
 
 If there are any differences — new tools, removed tools, or descriptions that no longer match — write the updated JSON to `TOOLKIT_DIR/configs/tools.json`. Keep keys sorted alphabetically, 2-space indentation.
 
-After updating, run `python3 TOOLKIT_DIR/manage.py tools` to verify the output.
+After updating, run `PYTHON TOOLKIT_DIR/manage.py tools` to verify the output.
 
 This keeps `aitk tools` accurate across Claude Code updates.
 

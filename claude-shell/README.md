@@ -8,24 +8,23 @@ of PowerShell that depend on nothing but PowerShell built-ins. It can call the
 Anthropic API directly, or shell out to your existing `claude` CLI so there is no
 per-token cost.
 
-- **Requires:** PowerShell 7.4+ and (for the key bindings) PSReadLine 2.4+.
+- **Requires:** PowerShell 7.4+ (Windows or macOS) and, for the key bindings, PSReadLine 2.4+.
 - **Dependencies:** none beyond the above. No third-party modules, no compiled binaries.
 
 ---
 
-## Install
+**Fastest — Claude-guided:** open Claude Code in the repo and say
+`follow claude-shell/SETUP.md`. It picks a backend, writes the config, and edits
+your `$PROFILE` for you — on Windows or macOS.
+
+**Manual:**
 
 1. Clone the `ai-toolkit-cnr` repo (you have likely already done this).
 2. Add the lines from [`examples/profile-snippet.ps1`](examples/profile-snippet.ps1)
-   to your PowerShell `$PROFILE`, editing the repo path to match your machine:
-
-   ```powershell
-   notepad $PROFILE        # create it first if needed: New-Item -ItemType File $PROFILE -Force
-   ```
-
-   The snippet imports the module and calls `Register-ClaudeShellKeyHandlers` to
-   bind Alt+E and Alt+X.
-
+   to your PowerShell `$PROFILE`, editing the repo path to match your machine.
+   Open the profile in any editor — `notepad $PROFILE` on Windows, `nano $PROFILE`
+   on macOS (create it first if needed: `New-Item -ItemType File $PROFILE -Force`).
+   The snippet imports the module and calls `Register-ClaudeShellKeyHandlers`.
 3. Open a new terminal (or run `. $PROFILE`).
 
 To use the module without touching `$PROFILE`, just import the manifest directly:
@@ -71,8 +70,8 @@ feel instant, use Backend A — it is a single HTTPS request and returns in ~1s.
 
 ### Config file
 
-`Set-ClaudeShellConfig` writes to `%USERPROFILE%\.claude-shell\config.json` — in
-your profile directory, **not** in this repo, so the repo stays committable.
+`Set-ClaudeShellConfig` writes to `~/.claude-shell/config.json` — in your home
+directory, **not** in this repo, so the repo stays committable.
 
 | Setting            | Default                          | Notes                                            |
 |--------------------|----------------------------------|--------------------------------------------------|
@@ -121,6 +120,10 @@ git diff --staged | Ask-Claude "commit message" | Set-Clipboard
 `Ask-Claude` is an alias of `Invoke-ClaudeAsk` (PowerShell reserves `Ask-` as an
 unapproved verb; the alias gives the friendly name without an import warning).
 
+> **macOS:** for Alt+E / Alt+X to register, your terminal must send Option as the
+> Meta key. Terminal.app: Settings → Profiles → Keyboard → "Use Option as Meta
+> key". iTerm2: Settings → Profiles → Keys → Left Option key → "Esc+".
+
 ---
 
 ## Security review
@@ -132,7 +135,7 @@ lines of PowerShell in one file — reading it end to end is the fastest audit.
 
 - Sends the text you act on (your buffer for Alt+E/Alt+X, or your piped input plus
   prompt for `Ask-Claude`) to Anthropic, and returns the reply.
-- Reads its config from `%USERPROFILE%\.claude-shell\config.json`.
+- Reads its config from `~/.claude-shell/config.json`.
 
 ### What it never does
 
@@ -207,7 +210,7 @@ top of `claude-shell.psm1`.
 2. Delete the config directory if you want to remove your API key:
 
    ```powershell
-   Remove-Item -Recurse "$env:USERPROFILE\.claude-shell"
+   Remove-Item -Recurse "$HOME/.claude-shell"
    ```
 
 3. Open a new terminal. The key bindings are gone; nothing else was installed.

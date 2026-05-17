@@ -1,16 +1,18 @@
-# claude-shell — add these lines to your PowerShell $PROFILE.
+# claude-shell — add these lines to your PowerShell 7 $PROFILE (Windows or macOS).
 #
-# Open your profile for editing with:
-#     notepad $PROFILE
-# If it does not exist yet, create it first:
-#     New-Item -ItemType File -Path $PROFILE -Force
-# Then start a new terminal, or reload with:  . $PROFILE
+# Edit your profile:   notepad $PROFILE   (Windows)  /  nano $PROFILE   (macOS)
+# Create it if needed: New-Item -ItemType File -Path $PROFILE -Force
+# Apply changes:       start a new terminal, or run  . $PROFILE
+#
+# Tip: instead of editing by hand, open Claude Code in the repo and say
+#      "follow claude-shell/SETUP.md" — it does all of this for you.
 
-# 1. Point this at wherever you cloned the ai-toolkit-cnr repo.
-$ClaudeShellRepo = "$HOME\codehub\ai-toolkit-cnr"
+# 1. Point this at wherever you cloned the ai-toolkit-cnr repo. Forward slashes
+#    work on every OS. Adjust the path to match this machine.
+$ClaudeShellRepo = "$HOME/codehub/ai-toolkit-cnr"
 
 # 2. Import the module and register the Alt+E / Alt+X key bindings.
-Import-Module (Join-Path $ClaudeShellRepo 'claude-shell\claude-shell.psd1')
+Import-Module (Join-Path $ClaudeShellRepo 'claude-shell/claude-shell.psd1')
 Register-ClaudeShellKeyHandlers
 
 # 3. (Optional) An extra binding — Alt+G drafts a commit message from the staged diff.

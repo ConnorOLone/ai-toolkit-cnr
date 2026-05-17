@@ -98,4 +98,6 @@ Tell the user:
 - That `aitk` is available globally to manage assets from anywhere
 - That the toolkit will auto-sync from git at the start of each Claude session
 - That `aitk tools` can be audited with the `tools-audit` skill to stay current
+- That an optional PowerShell terminal integration (Alt+E / Alt+X / `Ask-Claude`)
+  is available — to set it up, follow `claude-shell/SETUP.md`
 - To push any local commits if they want changes available on other devices

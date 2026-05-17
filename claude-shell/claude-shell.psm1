@@ -5,7 +5,8 @@
 
 Set-StrictMode -Version Latest
 
-$script:ConfigPath = Join-Path $env:USERPROFILE '.claude-shell\config.json'
+$script:ConfigPath = Join-Path $HOME '.claude-shell' 'config.json'   # $HOME: cross-platform
+$script:Os = if ($IsWindows) { 'Windows' } elseif ($IsMacOS) { 'macOS' } else { 'Linux' }
 
 # Defaults — overridden by config.json, which is written only by Set-ClaudeShellConfig.
 $script:Defaults = @{
@@ -18,7 +19,7 @@ $script:Defaults = @{
 
 # System prompts for the three features — kept here so they are easy to review and tweak.
 $script:Prompts = @{
-    Translate = 'You translate natural language into a single PowerShell command for Windows. Output ONLY the command, no explanation, no markdown, no backticks. The command must be a single line. Prefer modern PowerShell 7 syntax.'
+    Translate = "You translate natural language into a single PowerShell command for $($script:Os). Output ONLY the command, no explanation, no markdown, no backticks. The command must be a single line. Prefer modern PowerShell 7 syntax."
     Explain   = 'You explain shell commands. Given a command, reply with a plain-English explanation of what it does in 1-2 sentences. No markdown, no code blocks, no preamble.'
     Ask       = 'You are a concise assistant running inside a terminal pipeline. Answer directly. Output only what was asked, with no preamble or sign-off.'
 }

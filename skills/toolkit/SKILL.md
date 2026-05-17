@@ -21,6 +21,7 @@ skills/<name>/SKILL.md    — Claude Code skills (directory-based)
 agents/<name>.md          — Custom subagent definitions
 rules/<name>.md           — Path-specific instruction rules
 hooks/<name>.sh           — Shell scripts for hook events
+output-styles/<name>.md   — Custom output styles
 scripts/<name>.py|sh      — Standalone utility scripts
 prompts/<name>.md         — Reusable prompt templates
 configs/<name>.json|md    — Settings fragments, CLAUDE.md templates
@@ -94,8 +95,8 @@ exit 0
 ```
 
 - Must be executable (`chmod +x`)
-- Include a comment header with event and matcher info
-- The user must still register hooks in their settings.json
+- Include a comment header with `# Event:` and (for tool events) `# Matcher:` lines
+- Installing a hook via `manage.py`/`aitk` auto-registers it in `~/.claude/settings.json` from that header — no manual settings.json editing needed
 
 ### Scripts — `scripts/<name>.py|sh`
 
@@ -111,6 +112,22 @@ exit 0
 
 - Settings fragments, keybinding overrides, CLAUDE.md templates
 - Use `.example` suffix for configs with placeholders
+
+### Output Styles — `output-styles/<name>.md`
+
+```yaml
+---
+name: Display Name
+description: Shown in the /config picker
+keep-coding-instructions: false
+---
+
+System-prompt instructions...
+```
+
+- Single `.md` file per style; the file name is the style name unless `name` is set
+- `keep-coding-instructions: true` keeps Claude's built-in coding behavior
+- Skip `README.md`
 
 ## Commands
 

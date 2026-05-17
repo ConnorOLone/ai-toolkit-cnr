@@ -4,9 +4,10 @@
 # ///
 """Interactive CLI manager for the AI toolkit.
 
-Scans the toolkit for available assets (skills, agents, rules, hooks, configs),
-shows which are currently installed on this device, and lets you toggle them
-on or off with an interactive checklist.
+Scans the toolkit for available assets (skills, agents, rules, hooks, output
+styles, configs), shows which are currently installed on this device, and lets
+you toggle them on or off with an interactive checklist. Installing a hook also
+registers it in ~/.claude/settings.json; uninstalling removes the registration.
 
 Usage:
     aitk                       # interactive toggle UI
@@ -18,6 +19,7 @@ Usage:
 
 import os
 import sys
+import json
 import shutil
 import platform
 import subprocess
@@ -142,6 +144,154 @@ def parse_frontmatter(filepath):
     return meta
 
 
+# ── settings.json + hook registration ──────────────────────────────────────
+
+SETTINGS_FILE = CLAUDE_DIR / "settings.json"
+
+
+def parse_hook_header(filepath):
+    """Read 'Event:' and 'Matcher:' from a hook script's comment header."""
+    info = {"event": "", "matcher": ""}
+    try:
+        text = filepath.read_text(encoding="utf-8")
+    except Exception:
+        return info
+    for line in text.split("\n")[:20]:
+        stripped = line.strip()
+        if not stripped.startswith("#"):
+            continue
+        body = stripped.lstrip("#").strip()
+        low = body.lower()
+        if low.startswith("event:"):
+            info["event"] = body.split(":", 1)[1].strip()
+        elif low.startswith("matcher:"):
+            info["matcher"] = body.split(":", 1)[1].strip()
+    return info
+
+
+def read_settings():
+    """Return (data, error). data is a dict, or None if settings.json exists
+    but is unreadable or invalid — in which case error explains why."""
+    if not SETTINGS_FILE.exists():
+        return {}, ""
+    try:
+        text = SETTINGS_FILE.read_text(encoding="utf-8")
+    except Exception as e:
+        return None, f"could not read settings.json ({e})"
+    if not text.strip():
+        return {}, ""
+    try:
+        return json.loads(text), ""
+    except json.JSONDecodeError as e:
+        return None, f"settings.json is not valid JSON ({e})"
+
+
+def write_settings(data):
+    SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    SETTINGS_FILE.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+
+
+def find_hook_registrations(data, hook_filename):
+    """Return [(event, group)] for every settings hook entry whose command
+    references hook_filename."""
+    found = []
+    hooks = data.get("hooks")
+    if not isinstance(hooks, dict):
+        return found
+    for event, groups in hooks.items():
+        if not isinstance(groups, list):
+            continue
+        for group in groups:
+            for h in (group.get("hooks") or []):
+                if hook_filename in (h.get("command") or ""):
+                    found.append((event, group))
+                    break
+    return found
+
+
+def register_hook(event, matcher, dest_path):
+    """Merge a hook entry into ~/.claude/settings.json. Idempotent: skips if
+    the hook file is already registered anywhere. Returns a status note."""
+    data, err = read_settings()
+    if data is None:
+        return f"left settings.json untouched — {err}"
+    if find_hook_registrations(data, dest_path.name):
+        return "already registered"
+    command = f'bash "{dest_path.as_posix()}"'
+    entry = {"hooks": [{"type": "command", "command": command}]}
+    if matcher:
+        entry = {"matcher": matcher, "hooks": entry["hooks"]}
+    data.setdefault("hooks", {}).setdefault(event, []).append(entry)
+    write_settings(data)
+    return f"registered for {event}"
+
+
+def unregister_hook(hook_filename):
+    """Remove every settings hook entry referencing hook_filename, pruning any
+    group or event left empty. Returns a status note."""
+    data, err = read_settings()
+    if data is None:
+        return f"left settings.json untouched — {err}"
+    hooks = data.get("hooks")
+    if not isinstance(hooks, dict):
+        return ""
+    changed = False
+    for event in list(hooks.keys()):
+        groups = hooks[event]
+        if not isinstance(groups, list):
+            continue
+        kept = []
+        for group in groups:
+            inner = group.get("hooks") or []
+            filtered = [h for h in inner
+                        if hook_filename not in (h.get("command") or "")]
+            if len(filtered) == len(inner):
+                kept.append(group)
+            elif filtered:
+                kept.append({**group, "hooks": filtered})
+                changed = True
+            else:
+                changed = True  # group emptied — drop it
+        if kept:
+            hooks[event] = kept
+        else:
+            del hooks[event]
+            changed = True
+    if not hooks:
+        data.pop("hooks", None)
+    if changed:
+        write_settings(data)
+        return "unregistered"
+    return ""
+
+
+class HookAsset(Asset):
+    """A hook whose install/uninstall also (un)registers it in settings.json."""
+
+    def __init__(self, name, source_path, dest_path, description, event, matcher):
+        self.event = event
+        self.matcher = matcher
+        self.note = ""
+        super().__init__(name, "Hooks", source_path, dest_path, description)
+
+    def install(self):
+        super().install()
+        if not self.event:
+            self.note = "no '# Event:' header — register in settings.json manually"
+            return
+        try:
+            self.note = register_hook(self.event, self.matcher, self.dest_path)
+        except Exception as e:
+            self.note = f"file installed, but registration failed ({e})"
+
+    def uninstall(self):
+        try:
+            self.note = unregister_hook(self.dest_path.name)
+        except Exception as e:
+            self.note = f"removed, but settings.json cleanup failed ({e})"
+        super().uninstall()
+
+
 def discover_skills():
     assets = []
     skills_dir = REPO_DIR / "skills"
@@ -199,11 +349,17 @@ def discover_hooks():
     if not hooks_dir.is_dir():
         return assets
     for f in sorted(hooks_dir.glob("*.sh")):
-        if f.name == "README.md":
-            continue
         name = f.stem
         dest = CLAUDE_DIR / "hooks" / f.name
-        assets.append(Asset(name, "Hooks", f, dest, "Shell script"))
+        header = parse_hook_header(f)
+        event, matcher = header["event"], header["matcher"]
+        if event and matcher:
+            desc = f"{event} hook · matcher: {matcher}"
+        elif event:
+            desc = f"{event} hook"
+        else:
+            desc = "Shell script — no '# Event:' header"
+        assets.append(HookAsset(name, f, dest, desc, event, matcher))
     return assets
 
 
@@ -225,10 +381,26 @@ def discover_configs():
     return assets
 
 
+def discover_output_styles():
+    assets = []
+    styles_dir = REPO_DIR / "output-styles"
+    if not styles_dir.is_dir():
+        return assets
+    for f in sorted(styles_dir.glob("*.md")):
+        if f.name == "README.md":
+            continue
+        meta = parse_frontmatter(f)
+        desc = meta.get("description") or meta.get("name") or "Output style"
+        dest = CLAUDE_DIR / "output-styles" / f.name
+        assets.append(Asset(f.stem, "Output Styles", f, dest, desc))
+    return assets
+
+
 def discover_all():
     all_assets = []
     for discover_fn in [discover_skills, discover_agents, discover_rules,
-                        discover_hooks, discover_configs]:
+                        discover_hooks, discover_output_styles,
+                        discover_configs]:
         found = discover_fn()
         all_assets.extend(found)
     return all_assets
@@ -299,6 +471,7 @@ def write_toolkit_path():
 def apply_changes(assets):
     installed = []
     removed = []
+    notes = []
     for asset in assets:
         if asset.selected and not asset.installed:
             asset.install()
@@ -306,6 +479,11 @@ def apply_changes(assets):
         elif not asset.selected and asset.installed:
             asset.uninstall()
             removed.append(asset.name)
+        else:
+            continue
+        note = getattr(asset, "note", "")
+        if note:
+            notes.append(f"{asset.name}: {note}")
     if installed or removed:
         write_toolkit_path()
     parts = []
@@ -313,15 +491,18 @@ def apply_changes(assets):
         parts.append(f"{GREEN}Installed: {', '.join(installed)}{RESET}")
     if removed:
         parts.append(f"{RED}Removed: {', '.join(removed)}{RESET}")
-    return "  ".join(parts) if parts else f"{DIM}Nothing to do{RESET}"
+    message = "  ".join(parts) if parts else f"{DIM}Nothing to do{RESET}"
+    if notes:
+        message += f"\n  {DIM}Hooks — " + "  ·  ".join(notes) + RESET
+    return message
 
 
 def run():
     assets = discover_all()
 
     if not assets:
-        print("No assets found in the toolkit. Add skills, agents, rules, hooks,")
-        print(f"or configs to: {REPO_DIR}")
+        print("No assets found in the toolkit. Add skills, agents, rules,")
+        print(f"hooks, output styles, or configs to: {REPO_DIR}")
         return
 
     cursor = 0
@@ -386,8 +567,12 @@ HOOK_FIELDS = [
     ("matcher", None, "Tool matcher pattern (e.g. Bash, Write|Edit)"),
 ]
 
+OUTPUT_STYLE_FIELDS = [
+    ("name",                     None,    "Display name in /config (blank = file name)"),
+    ("description",              None,    "Shown in the /config style picker"),
+    ("keep-coding-instructions", "false", "Keep Claude's built-in coding instructions? (true/false)"),
+]
 
-import json
 
 TOOLS_JSON = REPO_DIR / "configs" / "tools.json"
 
@@ -556,7 +741,29 @@ def scaffold_hook(name, bare=False):
     hook_file.write_text("\n".join(lines), encoding="utf-8")
     hook_file.chmod(0o755)
     print(f"\n{GREEN}Created: {hook_file}{RESET}")
-    print(f"{DIM}Register this hook in your settings.json to activate it.{RESET}")
+    if event:
+        print(f"{DIM}Installing it with 'aitk' registers it for {event} in settings.json.{RESET}")
+    else:
+        print(f"{DIM}Add an '# Event:' header line so 'aitk' can auto-register it.{RESET}")
+
+
+def scaffold_output_style(name, bare=False):
+    style_file = REPO_DIR / "output-styles" / f"{name}.md"
+    if style_file.exists():
+        print(f"{RED}Output style '{name}' already exists at {style_file}{RESET}")
+        return
+    fields = {}
+    if not bare:
+        print(f"\n{BOLD}New output style: {name}{RESET}")
+        print(f"{DIM}Press Enter to accept [default] or type a value. Enter to skip optional fields.{RESET}\n")
+        for label, default, hint in OUTPUT_STYLE_FIELDS:
+            fields[label] = prompt_field(label, default, hint)
+
+    body = build_frontmatter(OUTPUT_STYLE_FIELDS, fields) + "\n\n# " + name.replace("-", " ").title() + "\n\n"
+
+    (REPO_DIR / "output-styles").mkdir(parents=True, exist_ok=True)
+    style_file.write_text(body, encoding="utf-8")
+    print(f"\n{GREEN}Created: {style_file}{RESET}")
 
 
 SCAFFOLDERS = {
@@ -564,6 +771,7 @@ SCAFFOLDERS = {
     "agent": scaffold_agent,
     "rule": scaffold_rule,
     "hook": scaffold_hook,
+    "output-style": scaffold_output_style,
 }
 
 
@@ -584,7 +792,8 @@ NEXT_STEP_HINTS = {
     "skill": "Next: open the skill in your editor or Claude Code to flesh it out.",
     "agent": "Next: open the agent file to add instructions and behavior.",
     "rule":  "Next: open the rule file to add your instructions.",
-    "hook":  "Next: add your logic and register the hook in settings.json.",
+    "hook":  "Next: add your logic — 'aitk' registers it in settings.json on install.",
+    "output-style": "Next: open the file and write the system-prompt instructions.",
 }
 
 
@@ -607,6 +816,7 @@ def cmd_new(args):
         "agent": REPO_DIR / "agents" / f"{name}.md",
         "rule":  REPO_DIR / "rules" / f"{name}.md",
         "hook":  REPO_DIR / "hooks" / f"{name}.sh",
+        "output-style": REPO_DIR / "output-styles" / f"{name}.md",
     }
     created_path = str(asset_paths[asset_type])
     if copy_to_clipboard(created_path):
@@ -685,6 +895,7 @@ def cmd_status():
     assets = discover_all()
     installed = [a for a in assets if a.installed]
     not_installed = [a for a in assets if not a.installed]
+    settings_data, _ = read_settings()
 
     print(f"  {BOLD}Assets: {len(assets)} available, {len(installed)} installed{RESET}\n")
 
@@ -699,7 +910,14 @@ def cmd_status():
                     dst_content = a.dest_path.read_bytes()
                     if src_content != dst_content:
                         drift = f" {YELLOW}(drifted — re-run aitk to update){RESET}"
-            print(f"    {GREEN}■{RESET} [{a.category}] {a.name}{drift}")
+            # Show settings.json registration state for hooks
+            reg = ""
+            if isinstance(a, HookAsset) and a.event:
+                if settings_data and find_hook_registrations(settings_data, a.dest_path.name):
+                    reg = f" {GREEN}(registered){RESET}"
+                else:
+                    reg = f" {YELLOW}(not registered — re-run aitk){RESET}"
+            print(f"    {GREEN}■{RESET} [{a.category}] {a.name}{drift}{reg}")
 
     if not_installed:
         print(f"\n  {DIM}Not installed:{RESET}")
@@ -765,6 +983,12 @@ def cmd_help():
   agent                         Agent definition (.md with frontmatter)
   rule                          Path-specific instruction rule (.md)
   hook                          Shell script for Claude Code hook events (.sh)
+  output-style                  System-prompt output style (.md with frontmatter)
+
+{BOLD}Hooks:{RESET}
+  Installing a hook with 'aitk' registers it in ~/.claude/settings.json,
+  reading the event from its '# Event:' / '# Matcher:' header. Uninstalling
+  removes the registration. 'aitk status' shows each hook's registration state.
 
 {BOLD}Scaffolding notes:{RESET}
   All fields are optional — press Enter to skip or accept defaults.
@@ -779,7 +1003,7 @@ def cmd_help():
 
 {BOLD}Setup:{RESET}
   Clone the repo, open Claude Code, and say: follow setup.md
-  Or run: python3 manage.py && python3 manage.py --install-cli
+  First run: install the CLI with 'manage.py --install-cli', then run 'aitk'.
 """)
 
 

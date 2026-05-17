@@ -9,6 +9,7 @@ skills/          — Claude Code skills (directory-based with SKILL.md + frontma
 agents/          — Custom subagent definitions
 rules/           — Path-specific instruction rules
 hooks/           — Claude Code hooks (shell scripts triggered by events)
+output-styles/   — Custom output styles (system-prompt .md files)
 scripts/         — Standalone utility scripts
 prompts/         — Reusable prompt templates and system prompts
 mcp/             — MCP server configurations and custom servers

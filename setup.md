@@ -29,66 +29,44 @@ Write the absolute path of `TOOLKIT_DIR` to `~/.claude/.toolkit-path`. Create th
 
 Use forward slashes in the path (e.g. `C:/Users/you/CodeHub/ai-toolkit-cnr`), not backslashes. The marker is read by both Python and the bash sync hook, and forward slashes are valid for both. `manage.py` rewrites this file in the same forward-slash format whenever assets are installed or removed.
 
-## Step 4: Install assets interactively
+## Step 4: Install the `aitk` global command
 
-Tell the user you are about to launch the interactive asset manager, which lets them choose which skills, agents, rules, hooks, and configs to install on this device. Then run:
-
-```
-PYTHON TOOLKIT_DIR/manage.py
-```
-
-This must run in an interactive terminal. Tell the user to run it themselves with `!` prefix if you cannot run interactive commands.
-
-## Step 5: Install the `aitk` global command
-
-Run:
+`aitk` is the toolkit's CLI — it is `manage.py` made available from any directory. Installing it first lets the next step (and all future asset management) use `aitk` instead of a script path. This is the one step that must call the script directly, since `aitk` does not exist yet:
 
 ```
 PYTHON TOOLKIT_DIR/manage.py --install-cli
 ```
 
-This creates an `aitk` alias so the manager can be invoked from any directory.
+This creates an `aitk` command so the manager can be invoked from anywhere.
 
 On macOS/Linux this writes to `~/.local/bin/aitk`. If `~/.local/bin` is not on the user's PATH, tell them to add it.
 
-On Windows this writes to `%LOCALAPPDATA%\Microsoft\WindowsApps\aitk.cmd`.
+On Windows this writes to `%LOCALAPPDATA%\Microsoft\WindowsApps\aitk.cmd` (already on PATH).
 
-## Step 6: Register the auto-sync hook
+## Step 5: Install assets interactively
 
-Read the user's `~/.claude/settings.json`. Add a `SessionStart` hook that runs the toolkit sync script. Merge with any existing hooks — never replace.
-
-The hook to add:
-
-```json
-{
-  "SessionStart": [
-    {
-      "hooks": [
-        {
-          "type": "command",
-          "command": "TOOLKIT_DIR/hooks/toolkit-sync.sh",
-          "timeout": 15,
-          "statusMessage": "Syncing AI toolkit..."
-        }
-      ]
-    }
-  ]
-}
-```
-
-Replace `TOOLKIT_DIR` with the actual absolute path resolved in Step 1, using forward slashes.
-
-`toolkit-sync.sh` is a bash script. On macOS/Linux the bare path above runs directly. On Windows it does not — a `.sh` path is not executable on its own. Set the `command` to invoke it through bash instead:
+Tell the user you are about to launch the interactive asset manager, which lets them choose which skills, agents, rules, hooks, output styles, and configs to install on this device. In a freshly opened terminal — so the `aitk` command from Step 4 is on PATH — run:
 
 ```
-bash "TOOLKIT_DIR/hooks/toolkit-sync.sh"
+aitk
 ```
 
-Git Bash provides `bash` and is installed alongside the required `git`, so this is always available on Windows.
+This must run in an interactive terminal. Tell the user to run it themselves (typing `aitk` in their own terminal pane, or with the `!` prefix) if you cannot run interactive commands.
 
-If a SessionStart hook for toolkit-sync already exists, skip this step.
+If `aitk` is not found (e.g. PATH not yet refreshed), fall back to `PYTHON TOOLKIT_DIR/manage.py` — it is the same program.
 
-Validate that the resulting settings.json is valid JSON before writing.
+## Step 6: Enable the auto-sync hook
+
+The toolkit ships a `toolkit-sync` hook that pulls the latest toolkit from git at the start of each Claude session. It appears in the Step 5 asset picker like any other hook.
+
+Installing a hook through `aitk` also registers it in `~/.claude/settings.json` automatically — it reads the `# Event:` header (`SessionStart` for this hook) and writes a `bash "..."` command that works on macOS, Linux, and Windows alike. Git Bash provides `bash` on Windows, and is installed alongside the required `git`.
+
+So there is no settings.json editing to do by hand:
+
+- If `toolkit-sync` was enabled in the Step 5 picker, it is already installed and registered — nothing to do.
+- If it was not, run `aitk` again and enable `toolkit-sync` now.
+
+Then confirm `~/.claude/settings.json` has a `SessionStart` hook whose command references `toolkit-sync.sh`. `aitk status` also marks the hook as `(registered)`.
 
 ## Step 7: Audit and update tools reference
 

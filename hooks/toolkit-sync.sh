@@ -1,7 +1,8 @@
 #!/bin/bash
 # Auto-sync the AI toolkit at Claude Code session start.
-# Event: PostToolUse (on any first tool call) or run manually.
+# Event: SessionStart
 #
+# Runs at the start of each Claude Code session (or manually).
 # Reads the toolkit path from ~/.claude/.toolkit-path, does a
 # non-destructive git pull if there are upstream changes, and
 # re-runs manage.py to update installed assets.

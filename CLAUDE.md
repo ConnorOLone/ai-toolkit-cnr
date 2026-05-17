@@ -8,6 +8,7 @@ This repository stores AI-related tools: skills, hooks, scripts, prompts, MCP se
 - `agents/` — Custom subagent definitions (`.md` files with frontmatter)
 - `rules/` — Path-specific instruction rules (`.md` files with `paths:` frontmatter)
 - `hooks/` — Shell scripts for Claude Code hook events
+- `output-styles/` — Custom output styles (`.md` files with frontmatter)
 - `scripts/` — Standalone utility scripts
 - `prompts/` — Reusable prompt templates
 - `mcp/` — MCP server source code
@@ -20,7 +21,8 @@ This repository stores AI-related tools: skills, hooks, scripts, prompts, MCP se
 - Each directory has its own README with usage instructions
 - Skills use the directory-based format: `skills/<name>/SKILL.md` with YAML frontmatter
 - Keep skill/agent/rule directories clean — examples go in `examples/` only
-- Hook scripts must be executable
+- Hook scripts must be executable and carry an `# Event:` header — `aitk`
+  registers/unregisters them in `~/.claude/settings.json` on install/uninstall
 
 ## Official Documentation
 

@@ -29,8 +29,10 @@ Once installed via `aitk`, run them in any project:
 
 | Trigger | Use when |
 |---|---|
-| `/plan <brief>` | You have an idea but not yet a plan. Dispatches `explorer` + `planner` (+ optional `critic`) and writes the plan to `.claude/plans/<slug>.md`. |
-| `/tdd <task>` | You have an approved plan and want to ship a single task. Red test → green implementation → one commit. |
+| `/plan <brief>` | You have an idea but not yet a plan. Dispatches `explorer` + `planner` + `critic` and writes a draft to `.claude/plans/<slug>.draft.md`. |
+| `/plan iterate [slug]` | Edit the draft inline (HTML comments, `Q:` prefixes, struck text). Then run this — `planner` addresses your feedback (pushing back if it disagrees) and `critic` re-reviews. |
+| `/plan finalize [slug]` | Strip feedback markers, validate structure, write the canonical plan to `.claude/plans/<slug>.md`, archive the draft. |
+| `/tdd <task>` | You have an approved canonical plan and want to ship a single task. Red test → green implementation → one commit. |
 | `/review [ref]` | Implementation is done. Fresh-context review by `code-reviewer` + `security-reviewer` in parallel. |
 | `/harness` | End of session. Reviews friction, proposes one concrete harness improvement (rule / hook / skill update / CLAUDE.md line). |
 | `agent-workflow` skill | Parallel work across multiple agents — see `skills/agent-workflow/` and `agentctl`. |

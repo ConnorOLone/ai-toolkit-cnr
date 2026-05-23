@@ -2,6 +2,17 @@
 
 This repository stores AI-related tools: skills, hooks, scripts, prompts, MCP servers, and configs.
 
+## Workflow model
+
+This toolkit is built around a **two-loop workflow**:
+
+- **Outer loop** (human, ~15–30 min/feature): `/plan` → review → `/review` after implementation → `/harness` to capture learnings.
+- **Inner loop** (agent, ~5–60 min/feature): `/tdd` → red test → green implementation → one commit per session.
+
+The compounding harness (CLAUDE.md, hooks, skills, agents, rules) is the strategic asset, not the code agents produce. Use `/harness` to grow it deliberately.
+
+**Verifier-critic asymmetry**: never let the same context that wrote code grade it. Use `/review` or dispatch the `code-reviewer`/`security-reviewer` agents in a fresh context. Reviewer agents must never list `Edit`/`Write` in their `allowed-tools` — see `rules/verifier-critic-asymmetry.md`.
+
 ## Project layout
 
 - `skills/` — Claude Code skills (directory-based, each with `SKILL.md` + frontmatter)

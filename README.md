@@ -22,6 +22,19 @@ examples/        — Reference templates (not symlinked — copy to create new a
 
 Each directory contains its own README with conventions and docs links.
 
+## Workflow tools
+
+User-invocable slash commands that codify the two-loop development workflow.
+Once installed via `aitk`, run them in any project:
+
+| Trigger | Use when |
+|---|---|
+| `/plan <brief>` | You have an idea but not yet a plan. Dispatches `explorer` + `planner` (+ optional `critic`) and writes the plan to `.claude/plans/<slug>.md`. |
+| `/tdd <task>` | You have an approved plan and want to ship a single task. Red test → green implementation → one commit. |
+| `/review [ref]` | Implementation is done. Fresh-context review by `code-reviewer` + `security-reviewer` in parallel. |
+| `/harness` | End of session. Reviews friction, proposes one concrete harness improvement (rule / hook / skill update / CLAUDE.md line). |
+| `agent-workflow` skill | Parallel work across multiple agents — see `skills/agent-workflow/` and `agentctl`. |
+
 ## Setup
 
 ### Claude-guided setup (recommended)

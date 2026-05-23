@@ -5,9 +5,10 @@
 """Interactive CLI manager for the AI toolkit.
 
 Scans the toolkit for available assets (skills, agents, rules, hooks, output
-styles, configs), shows which are currently installed on this device, and lets
-you toggle them on or off with an interactive checklist. Installing a hook also
-registers it in ~/.claude/settings.json; uninstalling removes the registration.
+styles, prompts, configs), shows which are currently installed on this device,
+and lets you toggle them on or off with an interactive checklist. Installing a
+hook also registers it in ~/.claude/settings.json; uninstalling removes the
+registration.
 
 Usage:
     aitk                       # interactive toggle UI
@@ -142,6 +143,21 @@ def parse_frontmatter(filepath):
             key, _, val = line.partition(":")
             meta[key.strip()] = val.strip()
     return meta
+
+
+def strip_frontmatter(text):
+    """Return text with any leading YAML frontmatter block removed."""
+    lines = text.split("\n")
+    if not lines or lines[0].strip() != "---":
+        return text
+    for i in range(1, len(lines)):
+        if lines[i].strip() == "---":
+            start = i + 1
+            # Drop a single trailing blank line for cleanliness
+            if start < len(lines) and not lines[start].strip():
+                start += 1
+            return "\n".join(lines[start:])
+    return text  # malformed — no closing ---
 
 
 # ── settings.json + hook registration ──────────────────────────────────────
@@ -396,11 +412,26 @@ def discover_output_styles():
     return assets
 
 
+def discover_prompts():
+    assets = []
+    prompts_dir = REPO_DIR / "prompts"
+    if not prompts_dir.is_dir():
+        return assets
+    for f in sorted(prompts_dir.glob("*.md")):
+        if f.name == "README.md":
+            continue
+        meta = parse_frontmatter(f)
+        desc = meta.get("description") or meta.get("name") or "Prompt template"
+        dest = CLAUDE_DIR / "prompts" / f.name
+        assets.append(Asset(f.stem, "Prompts", f, dest, desc))
+    return assets
+
+
 def discover_all():
     all_assets = []
     for discover_fn in [discover_skills, discover_agents, discover_rules,
                         discover_hooks, discover_output_styles,
-                        discover_configs]:
+                        discover_prompts, discover_configs]:
         found = discover_fn()
         all_assets.extend(found)
     return all_assets
@@ -573,6 +604,11 @@ OUTPUT_STYLE_FIELDS = [
     ("keep-coding-instructions", "false", "Keep Claude's built-in coding instructions? (true/false)"),
 ]
 
+PROMPT_FIELDS = [
+    ("name",        None, "Prompt name (blank = file name)"),
+    ("description", None, "What this prompt template is for"),
+]
+
 
 TOOLS_JSON = REPO_DIR / "configs" / "tools.json"
 
@@ -603,6 +639,62 @@ def cmd_tools():
     print(f"\n{DIM}Common set: Read Write Edit Glob Grep Bash{RESET}")
     print(f"{DIM}Blank allowed-tools = use your normal permission settings (not restrictive).{RESET}")
     print(f"{DIM}Source: {TOOLS_JSON}{RESET}\n")
+
+
+def cmd_prompt(args):
+    """List prompt templates or copy one into the current working directory."""
+    positional = [a for a in args if not a.startswith("-")]
+    force = "--force" in args or "-f" in args
+
+    # List mode
+    if not positional:
+        prompts = discover_prompts()
+        if not prompts:
+            print(f"\n  {YELLOW}No prompt templates found.{RESET}")
+            print(f"  Add .md files to {REPO_DIR / 'prompts'}\n")
+            return
+        print(f"\n{BOLD}Prompt templates{RESET}")
+        print(f"{DIM}Run 'aitk prompt <name>' to copy one into the current directory.{RESET}\n")
+        max_name = max(len(p.name) for p in prompts)
+        for p in prompts:
+            print(f"  {YELLOW}{p.name:<{max_name}}{RESET}  {p.description}")
+        print()
+        return
+
+    name = positional[0]
+    destination = positional[1] if len(positional) >= 2 else name
+    if not destination.endswith(".md"):
+        destination = destination + ".md"
+
+    # Source: installed copy first, fallback to repo
+    installed = CLAUDE_DIR / "prompts" / f"{name}.md"
+    repo = REPO_DIR / "prompts" / f"{name}.md"
+    if installed.exists():
+        source = installed
+    elif repo.exists():
+        source = repo
+    else:
+        print(f"{RED}Prompt '{name}' not found.{RESET}")
+        print(f"  Looked in: {installed}")
+        print(f"             {repo}")
+        print(f"\n  Run 'aitk prompt' to see available templates.")
+        return
+
+    dest = Path.cwd() / destination
+    if dest.exists() and not force:
+        print(f"{RED}{dest} already exists.{RESET} Use --force to overwrite.")
+        return
+
+    body = strip_frontmatter(source.read_text(encoding="utf-8"))
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(body, encoding="utf-8")
+    print(f"{GREEN}Created: {dest}{RESET}")
+    if source == installed:
+        print(f"{DIM}Source: ~/.claude/prompts/{name}.md (installed){RESET}")
+    else:
+        print(f"{DIM}Source: {source} (repo — not installed on this device){RESET}")
+    if copy_to_clipboard(str(dest)):
+        print(f"{DIM}Path copied to clipboard.{RESET}")
 
 
 def prompt_field(label, default, hint):
@@ -766,12 +858,34 @@ def scaffold_output_style(name, bare=False):
     print(f"\n{GREEN}Created: {style_file}{RESET}")
 
 
+def scaffold_prompt(name, bare=False):
+    prompt_file = REPO_DIR / "prompts" / f"{name}.md"
+    if prompt_file.exists():
+        print(f"{RED}Prompt '{name}' already exists at {prompt_file}{RESET}")
+        return
+    fields = {"name": name}
+    if not bare:
+        print(f"\n{BOLD}New prompt: {name}{RESET}")
+        print(f"{DIM}Press Enter to accept [default] or type a value. Enter to skip optional fields.{RESET}\n")
+        for label, default, hint in PROMPT_FIELDS:
+            if label == "name":
+                continue
+            fields[label] = prompt_field(label, default, hint)
+
+    body = build_frontmatter(PROMPT_FIELDS, fields) + "\n\n# " + name.replace("-", " ").title() + "\n\n"
+
+    (REPO_DIR / "prompts").mkdir(parents=True, exist_ok=True)
+    prompt_file.write_text(body, encoding="utf-8")
+    print(f"\n{GREEN}Created: {prompt_file}{RESET}")
+
+
 SCAFFOLDERS = {
     "skill": scaffold_skill,
     "agent": scaffold_agent,
     "rule": scaffold_rule,
     "hook": scaffold_hook,
     "output-style": scaffold_output_style,
+    "prompt": scaffold_prompt,
 }
 
 
@@ -794,6 +908,7 @@ NEXT_STEP_HINTS = {
     "rule":  "Next: open the rule file to add your instructions.",
     "hook":  "Next: add your logic — 'aitk' registers it in settings.json on install.",
     "output-style": "Next: open the file and write the system-prompt instructions.",
+    "prompt": "Next: open the file and write the template body — skills/agents reference it by path.",
 }
 
 
@@ -817,6 +932,7 @@ def cmd_new(args):
         "rule":  REPO_DIR / "rules" / f"{name}.md",
         "hook":  REPO_DIR / "hooks" / f"{name}.sh",
         "output-style": REPO_DIR / "output-styles" / f"{name}.md",
+        "prompt": REPO_DIR / "prompts" / f"{name}.md",
     }
     created_path = str(asset_paths[asset_type])
     if copy_to_clipboard(created_path):
@@ -973,6 +1089,8 @@ def cmd_help():
   aitk help                     Show this help message
   aitk status                   Show git sync state and installed assets
   aitk tools                    List all Claude Code tools with descriptions
+  aitk prompt                   List available prompt templates
+  aitk prompt <name> [dest]     Copy a prompt template into the current directory
   aitk new <type> <name>        Scaffold a new asset (interactive field prompts)
   aitk new <type> <name> --bare Scaffold with minimal skeleton, no prompts
   aitk --install-cli            Install the global 'aitk' command
@@ -984,6 +1102,7 @@ def cmd_help():
   rule                          Path-specific instruction rule (.md)
   hook                          Shell script for Claude Code hook events (.sh)
   output-style                  System-prompt output style (.md with frontmatter)
+  prompt                        Reusable prompt template (.md) referenced by skills/agents
 
 {BOLD}Hooks:{RESET}
   Installing a hook with 'aitk' registers it in ~/.claude/settings.json,
@@ -1025,6 +1144,9 @@ if __name__ == "__main__":
         sys.exit(0)
     if args and args[0] == "tools":
         cmd_tools()
+        sys.exit(0)
+    if args and args[0] == "prompt":
+        cmd_prompt(args[1:])
         sys.exit(0)
     if args and args[0] == "status":
         cmd_status()
